@@ -5,14 +5,16 @@ import { SERVER_ADDRESS } from "./constants"
 export interface VideoPlayerControllerProps  {
     videoRef : React.RefObject<HTMLVideoElement | null>, 
     manifestUrl: string,
-    ws: WebSocket
+    ws: WebSocket,
+    onChangeAlgorithm: (algorithm: string) => void
 }
 
 type SegmentSizesDicrionary = {
     [key: number]: Array<number>
 } 
 
-export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws} : VideoPlayerControllerProps) {
+export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws, onChangeAlgorithm} : VideoPlayerControllerProps) {
+    const BUFFER_THRESHOLD = 40
     const playerRef = useRef<MediaPlayerClass | null>(null)
     const bufferLevel = useRef<number>(0)
     const bitrates = useRef<Array<number>>([]) // kbps
@@ -34,6 +36,9 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
     const startRebufferingTime = useRef<number>(0)
     const lastBitrate = useRef<number>(0)
     const bitratesIndex = [0, 1, 3, 5, 7, 9]
+    const throughput = useRef<number>(0)
+    const isPensieve = useRef<boolean>(false)
+    const isInitPensieve = useRef<boolean>(false)
     
     const bitratesChangesHistory = useRef<Array<number>>([])
     const rebufferingsTimesHistory = useRef<Array<number>>([])
@@ -50,6 +55,7 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
     }
 
     useEffect(() => {
+        onChangeAlgorithm(isPensieve.current ? "PENSIEVE" : "DYNAMIC")
         const interval = setInterval(() => {
             var bitartes = bitrates.current.filter((_, index) => bitratesIndex.includes(index))
             addItem(bitratesHistory.current, Math.log(bitartes[currentBitrate.current] / bitartes[0]), 10)
@@ -68,9 +74,9 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        algorithm: 'pensieve',
+                        algorithm: 'pensieve + dynamic',
                         qoe: qoeValue,
-                        throughput: playerRef.current.getAverageThroughput('video') ?? 0,
+                        throughput: throughput.current,
                         buffer_level: playerRef.current.getBufferLength('video') ?? 0,
                         bitrate: bitartes[currentBitrate.current],
                         rebuffering_time: rebufferingTime.current / 1000
@@ -84,9 +90,9 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
         return () => clearInterval(interval)
     }, [])
 
-
     useEffect(() => {
         async function getNextSegmentSizes() {
+
             for (let i = 0; i < totalSegments.current; i++) {
                 const sizes = []
                 for (let j = 0; j < bitrates.current.length; j++) {
@@ -104,7 +110,13 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
             const player = MediaPlayer().create()
             player.initialize(videoRef!.current, manifestUrl, true)
             playerRef.current = player
-            
+            player.updateSettings({
+                streaming: {
+                    buffer: {
+                        fastSwitchEnabled: true
+                    }
+                }
+            })
             player.on('fragmentLoadingCompleted', (e) => {
                 console.log(segmentSizes.current)
                 if (e.request.index === segmentsDownloadCounter.current) return;
@@ -127,12 +139,14 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                 if (downloadTimeStartNextChunk.current === null)
                     return
                 downloadTimeLastChunk.current = new Date().getTime() - downloadTimeStartNextChunk.current //milliseconds
+                throughput.current = (e.request.bytesLoaded * 8) / (downloadTimeLastChunk.current / 1000)
                 bufferLevel.current = player.getBufferLength('video')
                 console.log('segments downloads ' + segmentsDownloadCounter.current)
                 console.log('segmentsRemain ' + segmentsRemain.current)
                 if (manifestInited.current === false)
                     return
-                if (!isNaN(bufferLevel.current)) {
+                if (isPensieve.current || isInitPensieve.current === false) {
+                    if (!isNaN(bufferLevel.current)) {
                     if (currentBitrate.current === undefined)
                         currentBitrate.current = 0
                     fetch(SERVER_ADDRESS + '/pensieve_predict', {
@@ -153,7 +167,25 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                             console.log(data)
                             currentBitrate.current = data.predicted
                         })
+                        isInitPensieve.current = true
                     })
+                }
+                }
+            })
+            
+            player.on('bufferLevelUpdated', (e) => {
+                console.log(bufferLevel.current)
+                if (playerRef.current) {
+                    if (playerRef.current.getBufferLength('video') <= BUFFER_THRESHOLD && isInitPensieve.current == true) {
+                    if (isPensieve.current == false) 
+                        onChangeAlgorithm("PENSIEVE")
+                    isPensieve.current = true
+                }
+                    else {
+                        if (isPensieve.current == true) 
+                            onChangeAlgorithm("DYNAMIC")
+                        isPensieve.current = false
+                    }
                 }
             })
 
@@ -161,7 +193,29 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                 const mediaType = (e as any).mediaType
                 if (mediaType !== 'video')
                     return
-                playerRef.current?.setRepresentationForTypeByIndex('video', bitratesIndex[currentBitrate.current])
+                if (isPensieve.current) {
+                    playerRef.current?.setRepresentationForTypeByIndex('video', bitratesIndex[currentBitrate.current])
+                }
+                else {
+                    playerRef.current?.updateSettings({
+                            streaming: {
+                                abr: {
+                                    autoSwitchBitrate: {
+                                        video: true
+                                    },
+                                    rules: {
+                                        bolaRule: {
+                                            active: true
+                                        },
+                                        throughputRule: {
+                                            active: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
                 downloadTimeStartNextChunk.current = new Date().getTime()
                 console.log('segmentLoadingStarted')
             })

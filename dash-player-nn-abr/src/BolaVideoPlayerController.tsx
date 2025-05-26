@@ -33,6 +33,7 @@ export default function BolaVideoPlayerController({videoRef, manifestUrl, ws} : 
     const rebufferingTime = useRef<number>(0)
     const startRebufferingTime = useRef<number>(0)
     const lastBitrate = useRef<number>(0)
+    const throughput = useRef<number>(0)
     
     const bitratesChangesHistory = useRef<Array<number>>([])
     const rebufferingsTimesHistory = useRef<Array<number>>([])
@@ -68,7 +69,7 @@ export default function BolaVideoPlayerController({videoRef, manifestUrl, ws} : 
                     body: JSON.stringify({
                         algorithm: 'bola',
                         qoe: qoeValue,
-                        throughput: playerRef.current.getAverageThroughput('video') ?? 0,
+                        throughput: throughput.current,
                         buffer_level: playerRef.current.getBufferLength('video') ?? 0,
                         bitrate: bitrates.current[currentBitrate.current ?? 0],
                         rebuffering_time: rebufferingTime.current / 1000
@@ -135,6 +136,7 @@ export default function BolaVideoPlayerController({videoRef, manifestUrl, ws} : 
                 if (downloadTimeStartNextChunk.current === null)
                     return
                 downloadTimeLastChunk.current = new Date().getTime() - downloadTimeStartNextChunk.current //milliseconds
+                throughput.current = (e.request.bytesLoaded * 8) / (downloadTimeLastChunk.current / 1000)
                 bufferLevel.current = player.getBufferLength('video')
                 console.log('segments downloads ' + segmentsDownloadCounter.current)
                 console.log('segmentsRemain ' + segmentsRemain.current)
