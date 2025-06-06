@@ -1,6 +1,6 @@
 import { createContext, useRef, useState } from 'react';
 import './App.css';
-import PensieveVideoPlayerController from './PensieveVideoPlayerController';
+import PensieveVideoPlayerController from './AiVideoPlayerController';
 import DynamicVideoPlayerController from './DynamicVideoPlayerController';
 import BolaVideoPlayerController from './BolaVideoPlayerController';
 import { NGINX_ADDRESS } from './constants';

@@ -3,7 +3,7 @@ export interface InitManifestData {
     totalVideoChunk: number
 }
 
-export interface PensieveDataRequest {
+export interface AiDataRequest {
     bitrate: number, //quality number
     bufferLevel: number, //seconds
     videoChunkSize: number, //byte
@@ -12,6 +12,6 @@ export interface PensieveDataRequest {
     videoChunkRemain: number, //points
 }
 
-export interface PensieveDataResponse {
+export interface AiDataResponse {
     bitrate: number
 }

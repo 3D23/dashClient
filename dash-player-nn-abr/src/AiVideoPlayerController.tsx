@@ -37,7 +37,7 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
     const lastBitrate = useRef<number>(0)
     const bitratesIndex = [0, 1, 3, 5, 7, 9]
     const throughput = useRef<number>(0)
-    const isPensieve = useRef<boolean>(false)
+    const isAi = useRef<boolean>(false)
     const isInitPensieve = useRef<boolean>(false)
     
     const bitratesChangesHistory = useRef<Array<number>>([])
@@ -55,7 +55,7 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
     }
 
     useEffect(() => {
-        onChangeAlgorithm(isPensieve.current ? "PENSIEVE" : "DYNAMIC")
+        onChangeAlgorithm(isAi.current ? "AI" : "DYNAMIC")
         const interval = setInterval(() => {
             var bitartes = bitrates.current.filter((_, index) => bitratesIndex.includes(index))
             addItem(bitratesHistory.current, Math.log(bitartes[currentBitrate.current] / bitartes[0]), 10)
@@ -145,11 +145,11 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                 console.log('segmentsRemain ' + segmentsRemain.current)
                 if (manifestInited.current === false)
                     return
-                if (isPensieve.current || isInitPensieve.current === false) {
+                if (isAi.current || isInitPensieve.current === false) {
                     if (!isNaN(bufferLevel.current)) {
                     if (currentBitrate.current === undefined)
                         currentBitrate.current = 0
-                    fetch(SERVER_ADDRESS + '/pensieve_predict', {
+                    fetch(SERVER_ADDRESS + '/predict', {
                         method: "POST",
                         headers: {
                             'Content-Type': 'application/json'
@@ -177,14 +177,14 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                 console.log(bufferLevel.current)
                 if (playerRef.current) {
                     if (playerRef.current.getBufferLength('video') <= BUFFER_THRESHOLD && isInitPensieve.current == true) {
-                    if (isPensieve.current == false) 
-                        onChangeAlgorithm("PENSIEVE")
-                    isPensieve.current = true
+                    if (isAi.current == false) 
+                        onChangeAlgorithm("AI")
+                    isAi.current = true
                 }
                     else {
-                        if (isPensieve.current == true) 
+                        if (isAi.current == true) 
                             onChangeAlgorithm("DYNAMIC")
-                        isPensieve.current = false
+                        isAi.current = false
                     }
                 }
             })
@@ -193,7 +193,7 @@ export default function PensieveVideoPlayerController({videoRef, manifestUrl, ws
                 const mediaType = (e as any).mediaType
                 if (mediaType !== 'video')
                     return
-                if (isPensieve.current) {
+                if (isAi.current) {
                     playerRef.current?.setRepresentationForTypeByIndex('video', bitratesIndex[currentBitrate.current])
                 }
                 else {
